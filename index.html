@@ -47,11 +47,15 @@ select,input[type=search]{width:100%;font:inherit;font-size:14px;padding:8px 10p
 #list .distance{grid-column:2;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
 #list button.go{grid-column:3;justify-self:end;align-self:center;font:inherit;font-size:11px;white-space:nowrap;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer}
 #list button.go:hover{background:var(--wash)}
+#list button.go:disabled{opacity:.65;cursor:wait}
 .location-actions{display:flex;gap:8px;flex-wrap:nowrap}
 .location-actions button{flex:1;min-width:0;white-space:nowrap;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
 .location-actions button:disabled{opacity:.65;cursor:wait}
 .location-actions button[aria-pressed="true"]{border-color:var(--gukbo);background:var(--gukbo);color:#fff;font-weight:600}
 #msg{min-height:1.4em;margin-top:7px;font-size:12px;color:var(--sub);line-height:1.4}
+.route-distance-label,.route-destination-label{white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 12px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
+.route-distance-label{background:#fff;color:var(--ink)}
+.route-destination-label{background:#fff;color:#3478c5}
 footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--sub);line-height:1.5}
 
 /* 개별 핀: 국보는 크게, 보물은 작게 */
@@ -66,6 +70,7 @@ footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;co
 
 /* 마우스 오버 미리보기 */
 .leaflet-tooltip.peek{padding:0;border:0;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.22);background:#fff;pointer-events:none;white-space:normal}
+.leaflet-tooltip.peek.pinned{pointer-events:auto}
 .leaflet-tooltip.peek::before{display:none}
 .peek .ph{width:220px;height:150px;background:#ece9e3;border-radius:10px 10px 0 0;overflow:hidden;position:relative}
 .peek .ph::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);background-size:200% 100%;animation:sh 1.1s linear infinite}
@@ -79,6 +84,10 @@ footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;co
 .peek .tg{display:inline-block;color:#fff;font-size:11px;border-radius:4px;padding:1px 6px;margin-bottom:4px}
 .peek .nm{font-family:"Noto Serif KR",serif;font-size:14px;font-weight:700;line-height:1.35;color:var(--ink)}
 .peek .mt{font-size:12px;color:var(--sub);margin-top:3px;font-variant-numeric:tabular-nums}
+.peek .popgo{width:100%;margin-top:9px;padding:7px 10px;border:0;border-radius:7px;background:var(--gukbo);color:#fff;font:600 13px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;cursor:pointer}
+.peek .popgo:disabled{opacity:.7;cursor:wait}
+.map-toast{position:absolute;z-index:1000;left:50%;bottom:24px;transform:translate(-50%,8px);max-width:calc(100% - 32px);padding:9px 14px;border-radius:8px;background:rgba(36,40,44,.92);color:#fff;font-size:13px;text-align:center;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none}
+.map-toast.visible{opacity:1;transform:translate(-50%,0)}
 
 @media (max-width:760px){
   body{flex-direction:column-reverse}
@@ -159,6 +168,9 @@ const STYLES = {
 };
 const KOREA = L.latLngBounds([33.0, 124.6], [38.7, 130.0]);
 const map = L.map('map', {minZoom:6, maxZoom:18, zoomSnap:.5}).fitBounds(KOREA);
+const routePane = map.createPane('routePane');
+routePane.style.zIndex = '700';
+routePane.style.pointerEvents = 'none';
 let base = null;
 const sel = document.getElementById('style');
 for (const [k, s] of Object.entries(STYLES)) sel.add(new Option(s.name, k));
@@ -212,23 +224,26 @@ for (const h of DATA){
 
 /* ---------- 4. 미리보기 팝업 (마우스 오버 / 모바일 탭) ----------
    - 사진은 띄우는 순간에만 불러오고, 한 번 받은 사진은 기억해 두었다가 즉시 표시
-   - 팝업은 pointer-events:none 이라 커서가 팝업 위로 지나가도 깜빡이지 않음
+   - hover 팝업은 pointer-events:none, 고정 팝업만 버튼 클릭을 받음
    - 지도가 확대·이동되는 동안에는 팝업을 닫아 위치 어긋남 방지 */
 const loaded = new Set(), failed = new Set();
 const peek = L.tooltip({className:'peek', opacity:1, interactive:false});
 let current = null, pinned = false;
 const canHover = window.matchMedia('(hover: hover)').matches;
 
-function peekHTML(h){
+function peekHTML(h, fixed=pinned){
   const st = failed.has(h.img) || !h.img ? 'fail' : (loaded.has(h.img) ? 'done' : '');
   const ph = st === 'fail'
     ? `<div class="ph fail">사진을 불러오지 못했습니다</div>`
     : `<div class="ph ${st}"><img src="${h.img}" alt="${h.name}" referrerpolicy="no-referrer" decoding="async"
          onload="this.parentNode.classList.add('done');window.__ok&&__ok(this.src)"
          onerror="this.parentNode.classList.add('fail');this.parentNode.textContent='사진을 불러오지 못했습니다';window.__ng&&__ng('${h.img}')"></div>`;
+  const routeButton = fixed
+    ? `<button class="go popgo" type="button" data-route-id="${h.id}"${activeRouteId === h.id ? ' disabled' : ''}>${activeRouteId === h.id ? activeRouteLabel : '길찾기'}</button>`
+    : '';
   return `${ph}<div class="tx"><span class="tg" style="background:${COLOR[h.cat]}">${CAT[h.cat]}</span>
     <div class="nm">${h.name}</div>
-    <div class="mt">${place(h)}<br>${fmtDate(h.date)} 지정 · 구 ${CAT[h.cat]} 제${h.no}호</div></div>`;
+    <div class="mt">${place(h)}<br>${fmtDate(h.date)} 지정 · 구 ${CAT[h.cat]} 제${h.no}호</div>${routeButton}</div>`;
 }
 window.__ok = src => loaded.add(src);
 window.__ng = src => failed.add(src);
@@ -244,14 +259,29 @@ function placeFor(latlng){
 function showPeek(m){
   const h = m.h, [dir, off] = placeFor(m.getLatLng());
   peek.options.direction = dir; peek.options.offset = L.point(off);
-  peek.setLatLng(m.getLatLng()).setContent(peekHTML(h));
+  peek.setLatLng(m.getLatLng()).setContent(peekHTML(h, pinned));
   if (!map.hasLayer(peek)) peek.addTo(map); else peek.update();
+  const tooltipElement = peek.getElement();
+  tooltipElement?.classList.toggle('pinned', pinned);
+  if (tooltipElement && !tooltipElement.dataset.clickBound){
+    L.DomEvent.disableClickPropagation(tooltipElement);
+    tooltipElement.addEventListener('click', e => {
+      const button = e.target.closest('.popgo');
+      if (!button || !tooltipElement.contains(button)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      startRoute(+button.dataset.routeId);
+      hidePeek();
+    });
+    tooltipElement.dataset.clickBound = 'true';
+  }
   if (current && current !== m) current.getElement()?.firstChild?.classList.remove('hot');
   m.getElement()?.firstChild?.classList.add('hot');
   current = m;
 }
 function hidePeek(){
   if (map.hasLayer(peek)) map.removeLayer(peek);
+  peek.getElement()?.classList.remove('pinned');
   current?.getElement()?.firstChild?.classList.remove('hot');
   current = null; pinned = false;
 }
@@ -260,7 +290,7 @@ cluster.on('mouseout',  () => { if (canHover && !pinned) hidePeek(); });
 // 클릭(탭): 팝업을 고정. 같은 점을 다시 누르거나 지도 빈 곳을 누르면 닫힘
 cluster.on('click', e => {
   if (pinned && current === e.layer){ hidePeek(); return; }
-  showPeek(e.layer); pinned = true;
+  pinned = true; showPeek(e.layer);
 });
 map.on('click', hidePeek);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hidePeek(); });
@@ -284,6 +314,7 @@ const ROUTE_DISTANCE_LIMIT_KM = 100;
 const ROUTE_BATCH_SIZE = 50;
 const ROUTE_DEBOUNCE_MS = 300;
 const distanceCache = new Map();
+const routeGeometryCache = new Map();
 const pendingRouteIds = new Set();
 const inFlightRouteIds = new Set();
 const locationButton = document.getElementById('locate');
@@ -291,6 +322,10 @@ const nearbyButton = document.getElementById('nearby');
 const message = document.getElementById('msg');
 let userPosition = null, locationKey = '', locationMarker = null, sortMode = 'default';
 let distanceObserver = null, routeTimer = 0, activeRouteRequests = 0, locating = false;
+let routeRunId = 0, routeController = null, routeAnimationFrame = null, routeAnimationResolve = null;
+let routeStartResolve = null, routeMoveEndHandler = null;
+let routeLine = null, routeProgressMarker = null, routeDestinationMarker = null;
+let activeRouteId = null, activeRouteLabel = '길찾기', routeToastTimer = 0;
 
 function roundedLocationKey(position){
   return `${position.lat.toFixed(4)},${position.lng.toFixed(4)}`;
@@ -316,6 +351,314 @@ function formatDuration(seconds){
   return minutes >= 60
     ? `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`
     : `${minutes}분`;
+}
+function updateRouteButtons(id, disabled, label='길찾기'){
+  document.querySelectorAll('#list li').forEach(li => {
+    if (+li.dataset.id !== id) return;
+    const button = li.querySelector('.go');
+    if (!button) return;
+    button.disabled = disabled;
+    button.textContent = label;
+  });
+  const popupButton = peek.getElement()?.querySelector(`.popgo[data-route-id="${id}"]`);
+  if (popupButton){
+    popupButton.disabled = disabled;
+    popupButton.textContent = label;
+  }
+}
+function showRouteToast(text){
+  const container = map.getContainer();
+  let toast = container.querySelector('.map-toast');
+  if (!toast){
+    toast = document.createElement('div');
+    toast.className = 'map-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    container.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.add('visible');
+  clearTimeout(routeToastTimer);
+  routeToastTimer = setTimeout(() => toast.classList.remove('visible'), 2400);
+}
+function clearRoute(){
+  if (activeRouteId !== null) updateRouteButtons(activeRouteId, false);
+  activeRouteId = null;
+  activeRouteLabel = '길찾기';
+  if (routeMoveEndHandler) map.off('moveend', routeMoveEndHandler);
+  routeMoveEndHandler = null;
+  routeStartResolve?.();
+  routeStartResolve = null;
+  if (routeAnimationFrame !== null) cancelAnimationFrame(routeAnimationFrame);
+  routeAnimationFrame = null;
+  routeAnimationResolve?.(false);
+  routeAnimationResolve = null;
+  routeController?.abort();
+  routeController = null;
+  [routeLine, routeProgressMarker, routeDestinationMarker].forEach(layer => {
+    if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+  });
+  routeLine = routeProgressMarker = routeDestinationMarker = null;
+}
+function fallbackRouteCurve(from, to){
+  const project = point => L.CRS.EPSG3857.project(L.latLng(point.lat, point.lng));
+  const start = project(from), end = project(to);
+  const dx = end.x - start.x, dy = end.y - start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const control = L.point((start.x + end.x) / 2 - dy / length * length * .25,
+    (start.y + end.y) / 2 + dx / length * length * .25);
+  const samples = [];
+  for (let i = 0; i <= 60; i++){
+    const t = i / 60, oneMinusT = 1 - t;
+    const point = L.point(
+      oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * control.x + t * t * end.x,
+      oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * control.y + t * t * end.y
+    );
+    samples.push(L.CRS.EPSG3857.unproject(point));
+  }
+  return samples;
+}
+function decodePolyline6(encoded){
+  const coordinates = [];
+  let index = 0, latitude = 0, longitude = 0;
+  const readValue = () => {
+    let result = 0, shift = 0, byte;
+    do {
+      if (index >= encoded.length) throw new Error('Valhalla 경로 좌표가 잘렸습니다.');
+      byte = encoded.charCodeAt(index++) - 63;
+      if (byte < 0 || byte > 63 || shift > 30) throw new Error('Valhalla 경로 좌표 형식이 올바르지 않습니다.');
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    return result & 1 ? ~(result >> 1) : result >> 1;
+  };
+  while (index < encoded.length){
+    latitude += readValue();
+    longitude += readValue();
+    coordinates.push(L.latLng(latitude / 1e6, longitude / 1e6));
+  }
+  return coordinates;
+}
+function simplifyProjectedRoute(projected){
+  if (projected.length <= 2) return projected.map(point => L.CRS.EPSG3857.unproject(point));
+  let tolerance = 15, simplified = L.LineUtil.simplify(projected, tolerance);
+  while (simplified.length > 800 && tolerance < 100000){
+    tolerance *= 2;
+    simplified = L.LineUtil.simplify(projected, tolerance);
+  }
+  if (simplified.length > 800){
+    const bounded = [];
+    for (let i = 0; i < 800; i++)
+      bounded.push(simplified[Math.round(i * (simplified.length - 1) / 799)]);
+    simplified = bounded;
+  }
+  return simplified.map(point => L.CRS.EPSG3857.unproject(point));
+}
+function decodeRouteGeometry(legs, from, to){
+  if (!Array.isArray(legs) || !legs.length) throw new Error('Valhalla 경로 좌표가 없습니다.');
+  const points = [];
+  legs.forEach((leg, index) => {
+    if (typeof leg.shape !== 'string') throw new Error('Valhalla 경로 형식이 올바르지 않습니다.');
+    const decoded = decodePolyline6(leg.shape);
+    if (!decoded.length) throw new Error('Valhalla 경로 좌표가 없습니다.');
+    points.push(...(index ? decoded.slice(1) : decoded));
+  });
+  points.unshift(L.latLng(from.lat, from.lng));
+  points.push(L.latLng(to.lat, to.lng));
+  const projected = points.map(point => L.CRS.EPSG3857.project(point));
+  const simplified = simplifyProjectedRoute(projected);
+  simplified[0] = L.latLng(from.lat, from.lng);
+  simplified[simplified.length - 1] = L.latLng(to.lat, to.lng);
+  return simplified;
+}
+function routeCumulativeLengths(points){
+  const lengths = [0];
+  for (let i = 1; i < points.length; i++)
+    lengths.push(lengths[i - 1] + straightDistanceKm(points[i - 1], points[i]));
+  return lengths;
+}
+function routePointAtDistance(points, cumulative, target){
+  let low = 0, high = cumulative.length - 1;
+  while (low < high){
+    const mid = Math.floor((low + high) / 2);
+    if (cumulative[mid] < target) low = mid + 1;
+    else high = mid;
+  }
+  const end = Math.max(1, low), start = end - 1;
+  const segmentLength = cumulative[end] - cumulative[start];
+  const ratio = segmentLength ? (target - cumulative[start]) / segmentLength : 0;
+  return {
+    index:start,
+    point:L.latLng(
+      points[start].lat + (points[end].lat - points[start].lat) * ratio,
+      points[start].lng + (points[end].lng - points[start].lng) * ratio
+    )
+  };
+}
+function animateRoute(runId, points, totalDistance, duration, straightFallback){
+  const cumulative = routeCumulativeLengths(points);
+  const pathLength = cumulative[cumulative.length - 1];
+  const lineStyle = {color:'#3478c5', weight:4, opacity:.9, pane:'routePane'};
+  if (straightFallback) lineStyle.dashArray = '8 8';
+  routeLine = L.polyline([points[0]], lineStyle).addTo(map);
+  const labelIcon = L.divIcon({
+    className:'',
+    html:`<div class="route-distance-label">${straightFallback ? '직선거리 기준 · ' : ''}0.0km</div>`,
+    iconAnchor:[0, 0]
+  });
+  routeProgressMarker = L.marker(points[0], {
+    icon:labelIcon, keyboard:false, interactive:false, pane:'routePane', zIndexOffset:100
+  }).addTo(map);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return new Promise(resolve => {
+    routeAnimationResolve = resolve;
+    const finish = () => {
+      if (runId !== routeRunId) return resolve(false);
+      routeAnimationFrame = null;
+      routeLine.setLatLngs(points);
+      routeProgressMarker.setLatLng(points[points.length - 1]);
+      const finalText = straightFallback
+        ? `직선거리 기준 · ${formatKm(totalDistance)}km`
+        : `${formatKm(totalDistance)}km · 자동차 약 ${formatDuration(duration)}`;
+      routeProgressMarker.getElement().firstElementChild.textContent = finalText;
+      routeDestinationMarker = L.marker(points[points.length - 1], {
+        keyboard:false,
+        interactive:false,
+        pane:'routePane',
+        zIndexOffset:100,
+        icon:L.divIcon({className:'', html:'<div class="route-destination-label">도착</div>', iconAnchor:[0, 0]})
+      }).addTo(map);
+      routeAnimationResolve = null;
+      resolve(true);
+    };
+    if (reduceMotion){ finish(); return; }
+    const startedAt = performance.now();
+    const drawFrame = now => {
+      if (runId !== routeRunId) return resolve(false);
+      const animationDuration = 1600 + Math.min(1600, totalDistance * 4);
+      const progress = Math.min(1, (now - startedAt) / animationDuration);
+      const eased = progress < .5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      const {index, point} = routePointAtDistance(points, cumulative, pathLength * eased);
+      const visiblePoints = points.slice(0, index + 1);
+      visiblePoints.push(point);
+      routeLine.setLatLngs(visiblePoints);
+      routeProgressMarker.setLatLng(point);
+      const label = routeProgressMarker.getElement()?.firstElementChild;
+      if (label) label.textContent = `${straightFallback ? '직선거리 기준 · ' : ''}${formatKm(totalDistance * eased)}km`;
+      if (progress < 1) routeAnimationFrame = requestAnimationFrame(drawFrame);
+      else finish();
+    };
+    routeAnimationFrame = requestAnimationFrame(drawFrame);
+  });
+}
+async function startRoute(id){
+  if (!userPosition){
+    message.textContent = '먼저 [내 위치]를 눌러 주세요';
+    showRouteToast('먼저 내 위치를 눌러 주세요');
+    return;
+  }
+  routeRunId++;
+  const runId = routeRunId;
+  clearRoute();
+  const h = DATA[id];
+  if (!h) return;
+  const from = {lat:userPosition.lat, lng:userPosition.lng};
+  const to = {lat:h.lat, lng:h.lng};
+  const straightDistance = straightDistanceKm(from, to);
+  const cacheKey = routeCacheKey(h.id);
+  const cachedGeometry = routeGeometryCache.get(cacheKey);
+  activeRouteId = h.id;
+  activeRouteLabel = '경로 불러오는 중…';
+  updateRouteButtons(h.id, true, activeRouteLabel);
+  let routeDistance = straightDistance, routeTime = 0, straightFallback = false;
+  let routePoints = null;
+  let timeoutId = 0;
+  try {
+    if (cachedGeometry){
+      routeDistance = cachedGeometry.distance;
+      routeTime = cachedGeometry.time;
+      routePoints = cachedGeometry.points;
+    } else {
+      const controller = new AbortController();
+      routeController = controller;
+      timeoutId = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(`${VALHALLA_URL}/route`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        signal:controller.signal,
+        body:JSON.stringify({
+          locations:[{lat:from.lat, lon:from.lng},{lat:to.lat, lon:to.lng}],
+          costing:'auto',
+          units:'kilometers'
+        })
+      });
+      if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
+      const data = await response.json();
+      const summary = data?.trip?.summary;
+      if (!summary || !Number.isFinite(summary.length) || !Number.isFinite(summary.time)){
+        throw new Error('Valhalla 경로 응답에 요약 정보가 없습니다.');
+      }
+      routeDistance = summary.length;
+      routeTime = summary.time;
+      routePoints = decodeRouteGeometry(data.trip.legs, from, to);
+      routeGeometryCache.set(cacheKey, {
+        points:routePoints,
+        distance:routeDistance,
+        time:routeTime
+      });
+      distanceCache.set(cacheKey, {kind:'route', distance:routeDistance, time:routeTime});
+      decorateList();
+    }
+    if (runId !== routeRunId) return;
+    message.textContent = '';
+  } catch (error) {
+    if (runId !== routeRunId) return;
+    straightFallback = true;
+    routeDistance = straightDistance;
+    routePoints = fallbackRouteCurve(from, to);
+    message.textContent = '경로를 불러오지 못했어요 · 직선거리 기준';
+  } finally {
+    clearTimeout(timeoutId);
+    if (runId === routeRunId) routeController = null;
+  }
+  if (runId !== routeRunId) return;
+  try {
+    activeRouteLabel = '경로 표시 중…';
+    updateRouteButtons(h.id, true, activeRouteLabel);
+    const bounds = L.latLngBounds(routePoints);
+    let beginAnimation;
+    const animationStarted = new Promise(resolve => {
+      beginAnimation = resolve;
+      routeStartResolve = resolve;
+    });
+    let started = false;
+    const begin = () => {
+      if (started || runId !== routeRunId) return;
+      started = true;
+      if (routeMoveEndHandler) map.off('moveend', routeMoveEndHandler);
+      routeMoveEndHandler = null;
+      routeStartResolve = null;
+      beginAnimation();
+    };
+    const initialCenter = map.getCenter(), initialZoom = map.getZoom();
+    routeMoveEndHandler = begin;
+    map.once('moveend', routeMoveEndHandler);
+    map.fitBounds(bounds, {padding:[60,60]});
+    if (initialZoom === map.getZoom() && initialCenter.equals(map.getCenter()))
+      requestAnimationFrame(begin);
+    await animationStarted;
+    if (runId !== routeRunId) return;
+    await animateRoute(runId, routePoints, routeDistance, routeTime, straightFallback);
+  } finally {
+    if (runId === routeRunId){
+      routeAnimationFrame = null;
+      routeAnimationResolve = null;
+      routeController = null;
+      updateRouteButtons(h.id, false);
+      activeRouteId = null;
+      activeRouteLabel = '길찾기';
+    }
+  }
 }
 function updateLocationButton(){
   locationButton.textContent = locating ? '위치 확인 중…' :
@@ -502,8 +845,11 @@ function render(fit){
     li.innerHTML = `<span class="dot" style="background:${COLOR[h.cat]}"></span>
       <span class="nm">${h.name}</span><span class="yr"></span>
       <span class="meta">${CAT[h.cat]} · ${place(h)}</span>
-      <span class="distance"></span><button class="go" type="button" aria-label="길찾기 ${h.name}">길찾기</button>`;
-    li.querySelector('.go').addEventListener('click', e => e.stopPropagation());
+      <span class="distance"></span><button class="go" type="button" data-route-id="${h.id}" aria-label="길찾기 ${h.name}"${activeRouteId === h.id ? ' disabled' : ''}>${activeRouteId === h.id ? activeRouteLabel : '길찾기'}</button>`;
+    li.querySelector('.go').addEventListener('click', e => {
+      e.stopPropagation();
+      startRoute(h.id);
+    });
     frag.appendChild(li);
   });
   ul.appendChild(frag);
