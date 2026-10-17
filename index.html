@@ -69,9 +69,14 @@ footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;co
 .hcl span{background:#fff;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
 
 /* 마우스 오버 미리보기 */
-.leaflet-tooltip.peek{padding:0;border:0;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.22);background:#fff;pointer-events:none;white-space:normal}
-.leaflet-tooltip.peek.pinned{pointer-events:auto}
-.leaflet-tooltip.peek::before{display:none}
+.leaflet-tooltip.peek{padding:0;border:0;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.22);background:#fff;pointer-events:auto;white-space:normal}
+.leaflet-tooltip.peek::before{display:block;position:absolute;width:auto;height:auto;border:0;margin:0;background:transparent;pointer-events:auto}
+.leaflet-tooltip-top.peek::before,.leaflet-tooltip-bottom.peek::before{left:0;right:0;height:16px}
+.leaflet-tooltip-top.peek::before{bottom:-16px}
+.leaflet-tooltip-bottom.peek::before{top:-16px}
+.leaflet-tooltip-left.peek::before,.leaflet-tooltip-right.peek::before{top:0;bottom:0;width:16px}
+.leaflet-tooltip-left.peek::before{right:-16px}
+.leaflet-tooltip-right.peek::before{left:-16px}
 .peek .ph{width:220px;height:150px;background:#ece9e3;border-radius:10px 10px 0 0;overflow:hidden;position:relative}
 .peek .ph::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);background-size:200% 100%;animation:sh 1.1s linear infinite}
 .peek .ph.done::after,.peek .ph.fail::after{display:none}
@@ -228,19 +233,17 @@ for (const h of DATA){
    - 지도가 확대·이동되는 동안에는 팝업을 닫아 위치 어긋남 방지 */
 const loaded = new Set(), failed = new Set();
 const peek = L.tooltip({className:'peek', opacity:1, interactive:false});
-let current = null, pinned = false;
+let current = null, pinned = false, pointerOverPeek = false, peekCloseTimer = 0;
 const canHover = window.matchMedia('(hover: hover)').matches;
 
-function peekHTML(h, fixed=pinned){
+function peekHTML(h){
   const st = failed.has(h.img) || !h.img ? 'fail' : (loaded.has(h.img) ? 'done' : '');
   const ph = st === 'fail'
     ? `<div class="ph fail">사진을 불러오지 못했습니다</div>`
     : `<div class="ph ${st}"><img src="${h.img}" alt="${h.name}" referrerpolicy="no-referrer" decoding="async"
          onload="this.parentNode.classList.add('done');window.__ok&&__ok(this.src)"
          onerror="this.parentNode.classList.add('fail');this.parentNode.textContent='사진을 불러오지 못했습니다';window.__ng&&__ng('${h.img}')"></div>`;
-  const routeButton = fixed
-    ? `<button class="go popgo" type="button" data-route-id="${h.id}"${activeRouteId === h.id ? ' disabled' : ''}>${activeRouteId === h.id ? activeRouteLabel : '길찾기'}</button>`
-    : '';
+  const routeButton = `<button class="go popgo" type="button" data-route-id="${h.id}"${activeRouteId === h.id ? ' disabled' : ''}>${activeRouteId === h.id ? activeRouteLabel : '길찾기'}</button>`;
   return `${ph}<div class="tx"><span class="tg" style="background:${COLOR[h.cat]}">${CAT[h.cat]}</span>
     <div class="nm">${h.name}</div>
     <div class="mt">${place(h)}<br>${fmtDate(h.date)} 지정 · 구 ${CAT[h.cat]} 제${h.no}호</div>${routeButton}</div>`;
@@ -257,14 +260,18 @@ function placeFor(latlng){
   return ['top', [0, -12]];
 }
 function showPeek(m){
+  clearTimeout(peekCloseTimer);
+  peekCloseTimer = 0;
+  pointerOverPeek = false;
   const h = m.h, [dir, off] = placeFor(m.getLatLng());
   peek.options.direction = dir; peek.options.offset = L.point(off);
-  peek.setLatLng(m.getLatLng()).setContent(peekHTML(h, pinned));
+  peek.setLatLng(m.getLatLng()).setContent(peekHTML(h));
   if (!map.hasLayer(peek)) peek.addTo(map); else peek.update();
   const tooltipElement = peek.getElement();
   tooltipElement?.classList.toggle('pinned', pinned);
   if (tooltipElement && !tooltipElement.dataset.clickBound){
     L.DomEvent.disableClickPropagation(tooltipElement);
+    L.DomEvent.disableScrollPropagation(tooltipElement);
     tooltipElement.addEventListener('click', e => {
       const button = e.target.closest('.popgo');
       if (!button || !tooltipElement.contains(button)) return;
@@ -273,20 +280,39 @@ function showPeek(m){
       startRoute(+button.dataset.routeId);
       hidePeek();
     });
+    tooltipElement.addEventListener('mouseenter', () => {
+      pointerOverPeek = true;
+      clearTimeout(peekCloseTimer);
+      peekCloseTimer = 0;
+    });
+    tooltipElement.addEventListener('mouseleave', () => {
+      pointerOverPeek = false;
+      schedulePeekClose();
+    });
     tooltipElement.dataset.clickBound = 'true';
   }
   if (current && current !== m) current.getElement()?.firstChild?.classList.remove('hot');
   m.getElement()?.firstChild?.classList.add('hot');
   current = m;
 }
+function schedulePeekClose(){
+  clearTimeout(peekCloseTimer);
+  peekCloseTimer = setTimeout(() => {
+    peekCloseTimer = 0;
+    if (!pinned && !pointerOverPeek) hidePeek();
+  }, 250);
+}
 function hidePeek(){
+  clearTimeout(peekCloseTimer);
+  peekCloseTimer = 0;
+  pointerOverPeek = false;
   if (map.hasLayer(peek)) map.removeLayer(peek);
   peek.getElement()?.classList.remove('pinned');
   current?.getElement()?.firstChild?.classList.remove('hot');
   current = null; pinned = false;
 }
 cluster.on('mouseover', e => { if (canHover && !pinned) showPeek(e.layer); });
-cluster.on('mouseout',  () => { if (canHover && !pinned) hidePeek(); });
+cluster.on('mouseout',  () => { if (canHover && !pinned) schedulePeekClose(); });
 // 클릭(탭): 팝업을 고정. 같은 점을 다시 누르거나 지도 빈 곳을 누르면 닫힘
 cluster.on('click', e => {
   if (pinned && current === e.layer){ hidePeek(); return; }
