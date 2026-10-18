@@ -176,6 +176,8 @@ const map = L.map('map', {minZoom:6, maxZoom:18, zoomSnap:.5}).fitBounds(KOREA);
 const routePane = map.createPane('routePane');
 routePane.style.zIndex = '700';
 routePane.style.pointerEvents = 'none';
+const peekPane = map.createPane('peekPane');
+peekPane.style.zIndex = '750';
 let base = null;
 const sel = document.getElementById('style');
 for (const [k, s] of Object.entries(STYLES)) sel.add(new Option(s.name, k));
@@ -232,7 +234,7 @@ for (const h of DATA){
    - hover 팝업은 pointer-events:none, 고정 팝업만 버튼 클릭을 받음
    - 지도가 확대·이동되는 동안에는 팝업을 닫아 위치 어긋남 방지 */
 const loaded = new Set(), failed = new Set();
-const peek = L.tooltip({className:'peek', opacity:1, interactive:false});
+const peek = L.tooltip({className:'peek', opacity:1, interactive:false, pane:'peekPane'});
 let current = null, pinned = false, pointerOverPeek = false, peekCloseTimer = 0;
 const canHover = window.matchMedia('(hover: hover)').matches;
 
