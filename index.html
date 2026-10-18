@@ -177,7 +177,7 @@ const routePane = map.createPane('routePane');
 routePane.style.zIndex = '700';
 routePane.style.pointerEvents = 'none';
 const peekPane = map.createPane('peekPane');
-peekPane.style.zIndex = '750';
+peekPane.style.zIndex = '1000';
 let base = null;
 const sel = document.getElementById('style');
 for (const [k, s] of Object.entries(STYLES)) sel.add(new Option(s.name, k));
