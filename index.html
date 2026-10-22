@@ -64,9 +64,8 @@ body:not(.has-location) #nearby,body:not(.has-location) #list button.go{opacity:
 body.has-location #locate:hover{background:var(--wash)}
 #locate:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #msg{height:2.8em;min-height:2.8em;overflow:hidden;margin-top:7px;font-size:12px;color:var(--sub);line-height:1.4}
-.route-distance-label,.route-destination-label{white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 12px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
+.route-distance-label{white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 12px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
 .route-distance-label{background:#fff;color:var(--ink)}
-.route-destination-label{background:#fff;color:#3478c5}
 footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--sub);line-height:1.5}
 
 /* 개별 핀: 국보는 크게, 보물은 작게 */
@@ -380,7 +379,7 @@ let userPosition = null, locationKey = '', locationMarker = null, sortMode = 'de
 let distanceObserver = null, routeTimer = 0, activeRouteRequests = 0, locating = false;
 let routeRunId = 0, routeController = null, routeAnimationFrame = null, routeAnimationResolve = null;
 let routeStartResolve = null, routeMoveEndHandler = null;
-let routeLine = null, routeProgressMarker = null, routeDestinationMarker = null;
+let routeLine = null, routeProgressMarker = null;
 let activeRouteId = null, activeRouteLabel = '길찾기', routeToastTimer = 0;
 
 function roundedLocationKey(position){
@@ -451,10 +450,10 @@ function clearRoute(){
   routeAnimationResolve = null;
   routeController?.abort();
   routeController = null;
-  [routeLine, routeProgressMarker, routeDestinationMarker].forEach(layer => {
+  [routeLine, routeProgressMarker].forEach(layer => {
     if (layer && map.hasLayer(layer)) map.removeLayer(layer);
   });
-  routeLine = routeProgressMarker = routeDestinationMarker = null;
+  routeLine = routeProgressMarker = null;
 }
 function fallbackRouteCurve(from, to){
   const project = point => L.CRS.EPSG3857.project(L.latLng(point.lat, point.lng));
@@ -560,7 +559,7 @@ function animateRoute(runId, points, totalDistance, duration, straightFallback){
   const labelIcon = L.divIcon({
     className:'',
     html:`<div class="route-distance-label">${straightFallback ? '직선거리 기준 · ' : ''}0.0km</div>`,
-    iconAnchor:[0, 0]
+    iconAnchor:[0, 36]
   });
   routeProgressMarker = L.marker(points[0], {
     icon:labelIcon, keyboard:false, interactive:false, pane:'routePane', zIndexOffset:100
@@ -577,13 +576,6 @@ function animateRoute(runId, points, totalDistance, duration, straightFallback){
         ? `직선거리 기준 · ${formatKm(totalDistance)}km`
         : `${formatKm(totalDistance)}km · 자동차 약 ${formatDuration(duration)}`;
       routeProgressMarker.getElement().firstElementChild.textContent = finalText;
-      routeDestinationMarker = L.marker(points[points.length - 1], {
-        keyboard:false,
-        interactive:false,
-        pane:'routePane',
-        zIndexOffset:100,
-        icon:L.divIcon({className:'', html:'<div class="route-destination-label">도착</div>', iconAnchor:[0, 0]})
-      }).addTo(map);
       routeAnimationResolve = null;
       resolve(true);
     };
