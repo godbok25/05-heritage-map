@@ -64,7 +64,7 @@ body:not(.has-location) #nearby,body:not(.has-location) #list button.go{opacity:
 body.has-location #locate:hover{background:var(--wash)}
 #locate:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #msg{height:2.8em;min-height:2.8em;overflow:hidden;margin-top:7px;font-size:12px;color:var(--sub);line-height:1.4}
-.route-distance-label{white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 12px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
+.route-distance-label{width:max-content;white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 14px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
 .route-distance-label{background:#fff;color:var(--ink)}
 footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--sub);line-height:1.5}
 
@@ -557,7 +557,7 @@ function animateRoute(runId, points, totalDistance, duration, straightFallback){
   if (straightFallback) lineStyle.dashArray = '8 8';
   routeLine = L.polyline([points[0]], lineStyle).addTo(map);
   const labelIcon = L.divIcon({
-    className:'',
+    className:'route-label',
     html:`<div class="route-distance-label">${straightFallback ? '직선거리 기준 · ' : ''}0.0km</div>`,
     iconAnchor:[0, 36]
   });
