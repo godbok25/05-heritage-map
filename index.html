@@ -60,8 +60,9 @@ body:not(.has-location) #locate{border-color:var(--gukbo);background:transparent
 body:not(.has-location) #locate::before{opacity:1}
 body:not(.has-location) #locate:hover::before{filter:brightness(.88)}
 body:not(.has-location) #nearby,body:not(.has-location) #list button.go{opacity:.55}
-.location-actions button:hover{background:var(--wash)}
-#locate:focus-visible,.location-actions button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#locate:hover{background:transparent}
+body.has-location #locate:hover{background:var(--wash)}
+#locate:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #msg{height:2.8em;min-height:2.8em;overflow:hidden;margin-top:7px;font-size:12px;color:var(--sub);line-height:1.4}
 .route-distance-label,.route-destination-label{white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 12px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
 .route-distance-label{background:#fff;color:var(--ink)}
