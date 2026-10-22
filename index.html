@@ -65,11 +65,9 @@ body:not(.has-location) #nearby,body:not(.has-location) #list button.go{opacity:
 #locate:hover{background:transparent}
 body.has-location #locate:hover{background:var(--wash)}
 #locate:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-#timeline-link{display:inline-block;max-width:100%;margin-top:4px;color:var(--gukbo);font-size:12px;line-height:1.4;text-decoration:none}
-#timeline-link:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:2px}
-#timeline-link .arrow{display:inline-block;transition:transform .2s}
-#timeline-link:hover{text-decoration:underline}
-#timeline-link:hover .arrow{transform:translateX(3px)}
+#timeline-link{display:inline-block;max-width:100%;margin-top:8px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font-size:12px;line-height:1.4;text-decoration:none;transition:background-color .2s,color .2s,border-color .2s}
+#timeline-link:hover{border-color:var(--gukbo);background:var(--gukbo);color:#fff}
+#timeline-link:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #msg{max-height:0;overflow:hidden;margin-top:0;font-size:12px;color:var(--sub);line-height:1.4;opacity:0;transition:max-height .2s ease,opacity .2s ease,margin-top .2s ease}
 #msg.visible{max-height:6em;margin-top:7px;opacity:1}
 @media (prefers-reduced-motion:reduce){#timeline-link .arrow,#msg{transition:none}}
@@ -131,7 +129,7 @@ footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;co
   <header>
     <h1>국가지정유산 지도</h1>
     <p class="lead">국보와 보물 840건의 위치입니다. 점에 마우스를 올리면 사진이 보이고, 휴대폰에서는 점을 누르면 됩니다.</p>
-    <a id="timeline-link" href="https://godbok25.github.io/04-heritage-timeline/" target="_blank" rel="noopener">언제 지정되었는지 궁금하다면 <span class="arrow">→</span> 지정일 타임라인 보기</a>
+    <a id="timeline-link" href="https://godbok25.github.io/04-heritage-timeline/" target="_blank" rel="noopener">국가지정유산 지정일 타임라인 보기</a>
   </header>
   <div class="block">
     <h2>종목</h2>
