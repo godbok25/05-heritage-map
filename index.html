@@ -54,7 +54,15 @@ select,input[type=search]{width:100%;font:inherit;font-size:14px;padding:8px 10p
 .location-actions button{flex:1;min-width:0;white-space:nowrap;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
 .location-actions button:disabled{opacity:.65;cursor:wait}
 .location-actions button[aria-pressed="true"]{border-color:var(--gukbo);background:var(--gukbo);color:#fff;font-weight:600}
-#msg{min-height:1.4em;margin-top:7px;font-size:12px;color:var(--sub);line-height:1.4}
+#locate{position:relative;isolation:isolate}
+#locate::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--gukbo);filter:brightness(.94);opacity:0;pointer-events:none}
+body:not(.has-location) #locate{border-color:var(--gukbo);background:transparent;color:#fff;font-weight:600}
+body:not(.has-location) #locate::before{opacity:1}
+body:not(.has-location) #locate:hover::before{filter:brightness(.88)}
+body:not(.has-location) #nearby,body:not(.has-location) #list button.go{opacity:.55}
+.location-actions button:hover{background:var(--wash)}
+#locate:focus-visible,.location-actions button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#msg{height:2.8em;min-height:2.8em;overflow:hidden;margin-top:7px;font-size:12px;color:var(--sub);line-height:1.4}
 .route-distance-label,.route-destination-label{white-space:nowrap;border-radius:6px;padding:4px 7px;font:600 12px Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;box-shadow:0 1px 5px rgba(0,0,0,.25)}
 .route-distance-label{background:#fff;color:var(--ink)}
 .route-destination-label{background:#fff;color:#3478c5}
@@ -136,7 +144,7 @@ footer{padding:10px 20px 14px;border-top:1px solid var(--line);font-size:11px;co
         <button id="locate" type="button">내 위치</button>
         <button id="nearby" type="button" aria-pressed="false">가까운 순 정렬</button>
       </div>
-      <div id="msg" role="status" aria-live="polite"></div>
+      <div id="msg" role="status" aria-live="polite">📍 [내 위치]를 누르면 가까운 순 정렬과 길찾기를 쓸 수 있어요</div>
     </div>
     <div id="count"></div>
     <ul id="list"></ul>
@@ -708,8 +716,8 @@ async function startRoute(id){
   }
 }
 function updateLocationButton(){
-  locationButton.textContent = locating ? '위치 확인 중…' :
-    (activeRouteRequests || pendingRouteIds.size ? '거리 계산 중…' : '내 위치');
+  document.body.classList.toggle('has-location', !!userPosition);
+  locationButton.textContent = locating ? '위치 확인 중…' : userPosition ? '내 위치 ✓' : '내 위치';
   locationButton.disabled = locating;
 }
 function updateNearbyButton(){
